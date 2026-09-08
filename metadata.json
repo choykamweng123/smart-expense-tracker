@@ -1,0 +1,10 @@
+{
+  "name": "Daily Expense Tracker",
+  "description": "An Android-ready daily personal expense tracker that auto-categorizes uploaded receipts and transactions using Gemini AI.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#059669" />
+      <stop offset="100%" stop-color="#0f766e" />
+    </linearGradient>
+    <linearGradient id="paperGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#f1f5f9" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.35" />
+    </filter>
+  </defs>
+  
+  <!-- App Background (Squircle for Android / PWA) -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+
+  <!-- Inner Receipt Card with Shadow -->
+  <g filter="url(#shadow)">
+    <!-- Receipt Body -->
+    <path d="M 140 100 
+             L 372 100 
+             L 372 400 
+             L 343 385 L 314 400 L 285 385 L 256 400 L 227 385 L 198 400 L 169 385 L 140 400 Z" 
+          fill="url(#paperGrad)" rx="8" />
+
+    <!-- Receipt Header Bar -->
+    <rect x="176" y="140" width="160" height="18" rx="9" fill="#059669" />
+    <rect x="216" y="172" width="80" height="10" rx="5" fill="#94a3b8" />
+
+    <!-- Receipt Dashed Line -->
+    <line x1="176" y1="205" x2="336" y2="205" stroke="#cbd5e1" stroke-width="3" stroke-dasharray="8,6" />
+
+    <!-- Receipt Item Rows -->
+    <rect x="176" y="230" width="90" height="12" rx="6" fill="#64748b" />
+    <rect x="296" y="230" width="40" height="12" rx="6" fill="#0f172a" />
+
+    <rect x="176" y="260" width="110" height="12" rx="6" fill="#64748b" />
+    <rect x="296" y="260" width="40" height="12" rx="6" fill="#0f172a" />
+
+    <rect x="176" y="290" width="75" height="12" rx="6" fill="#64748b" />
+    <rect x="296" y="290" width="40" height="12" rx="6" fill="#0f172a" />
+
+    <!-- Total Divider -->
+    <line x1="176" y1="325" x2="336" y2="325" stroke="#059669" stroke-width="4" />
+
+    <!-- Total Row with Currency Symbol -->
+    <text x="176" y="356" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="20" fill="#0f172a">TOTAL</text>
+    <text x="336" y="356" text-anchor="end" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="22" fill="#059669">$42.50</text>
+  </g>
+
+  <!-- Sparkle / AI badge -->
+  <circle cx="370" cy="120" r="32" fill="#fbbf24" />
+  <path d="M 370 102 L 374 116 L 388 120 L 374 124 L 370 138 L 366 124 L 352 120 L 366 116 Z" fill="#78350f" />
+</svg>
