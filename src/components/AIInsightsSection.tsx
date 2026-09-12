@@ -254,8 +254,8 @@ export const AIInsightsSection: React.FC<AIInsightsSectionProps> = ({
                   className={`rounded-2xl border p-3.5 sm:p-4 transition-all ${cardClasses}`}
                 >
                   {/* Top Row: Icon + Title + Status Pill */}
-                  <div className="flex items-start justify-between gap-2.5">
-                    <div className="flex items-start gap-2.5 min-w-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-2.5 min-w-0 flex-1">
                       <div
                         className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border mt-0.5 ${iconBadgeClasses}`}
                       >
@@ -265,11 +265,11 @@ export const AIInsightsSection: React.FC<AIInsightsSectionProps> = ({
                           <AlertTriangle className="h-4 w-4" />
                         )}
                       </div>
-                      <div className="min-w-0">
-                        <h4 className="text-xs sm:text-sm font-bold text-white leading-snug break-words">
+                      <div className="min-w-0 flex-1">
+                        <h4 className={`text-xs sm:text-sm font-bold leading-snug ${isDark ? 'text-white' : 'text-slate-900'}`}>
                           {alert.title}
                         </h4>
-                        <p className="text-xs text-slate-300 mt-0.5 leading-normal break-words">
+                        <p className={`text-xs mt-0.5 leading-normal ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
                           {alert.supportingText}
                         </p>
                       </div>
@@ -277,12 +277,39 @@ export const AIInsightsSection: React.FC<AIInsightsSectionProps> = ({
 
                     {alert.statusText && (
                       <span
-                        className={`rounded-lg px-2 py-0.5 text-[11px] font-bold border shrink-0 text-right ${statusBadgeClasses}`}
+                        className={`rounded-lg px-2.5 py-0.5 text-[11px] font-bold border shrink-0 text-center max-w-[48%] truncate ${statusBadgeClasses}`}
+                        title={alert.statusText}
                       >
                         {alert.statusText}
                       </span>
                     )}
                   </div>
+
+                  {/* Detailed Explanation Box */}
+                  {alert.explanation && (
+                    <div
+                      className={`mt-2.5 rounded-xl border px-3 py-2 text-xs leading-relaxed flex items-start gap-2 ${
+                        isCritical
+                          ? isDark
+                            ? 'border-rose-500/25 bg-rose-500/10 text-rose-200'
+                            : 'border-rose-200 bg-rose-50 text-rose-800'
+                          : isDark
+                          ? 'border-amber-500/25 bg-amber-500/10 text-amber-200'
+                          : 'border-amber-200 bg-amber-50 text-amber-800'
+                      }`}
+                    >
+                      <span
+                        className={`shrink-0 text-xs font-bold mt-0.5 ${
+                          isCritical
+                            ? isDark ? 'text-rose-400' : 'text-rose-600'
+                            : isDark ? 'text-amber-400' : 'text-amber-600'
+                        }`}
+                      >
+                        ℹ
+                      </span>
+                      <span className="break-words">{alert.explanation}</span>
+                    </div>
+                  )}
 
                   {/* Action Buttons Row */}
                   <div className="mt-3 pt-2.5 border-t border-white/10 flex items-center justify-between gap-2 flex-wrap">

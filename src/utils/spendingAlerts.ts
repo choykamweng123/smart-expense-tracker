@@ -10,6 +10,7 @@ export interface SpendingAlert {
   title: string;
   supportingText: string;
   statusText: string;
+  explanation?: string;
   category?: string;
   transaction?: Expense;
   spentAmount?: number;
@@ -277,8 +278,9 @@ export function calculateSpendingAlerts(
           severity: 'warning',
           priority: 3,
           title: 'Check this transaction',
-          supportingText: `${tx.merchant} • ${formatMoney(tx.amount, sym)} on ${tx.date}`,
-          statusText: `${formatMoney(tx.amount, sym)} is ${ratio}× the median of your ${priorExpenses.length} previous ${tx.category.toLowerCase()} expenses.`,
+          supportingText: `${tx.merchant || tx.category} • ${formatMoney(tx.amount, sym)} on ${tx.date}`,
+          statusText: `${ratio}× median`,
+          explanation: `${formatMoney(tx.amount, sym)} is ${ratio}× the median (${formatMoney(median, sym)}) of your ${priorExpenses.length} previous ${tx.category.toLowerCase()} expenses.`,
           category: tx.category,
           transaction: tx,
           spentAmount: tx.amount,
