@@ -108,6 +108,12 @@ export interface ParsedReceiptData {
   tags?: string[];
 }
 
+export interface ParsedBatchAnalysisResult {
+  isMultipleTransactions?: boolean;
+  statementSource?: string;
+  transactions: ParsedReceiptData[];
+}
+
 export interface CurrencyConfig {
   code: string;
   symbol: string;
@@ -129,6 +135,7 @@ export interface UserSettings {
   currency: string;
   currencySymbol: string;
   monthlyBudget: number;
+  savingsTarget?: number; // Monthly savings target/goal
   categoryBudgets?: Record<string, number>; // Category name -> monthly budget limit (legacy compatibility)
   categoryBudgetConfigs?: Record<string, CategoryBudgetConfig>; // Extended configuration
   hapticFeedback: boolean;

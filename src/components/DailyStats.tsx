@@ -50,74 +50,86 @@ export const DailyStats: React.FC<DailyStatsProps> = ({
   // Calculate start of current month
   const currentYearMonth = todayStr.slice(0, 7);
 
-  // Totals
-  let totalIncome = 0;
-  let totalExpense = 0;
+  // Helper for integer cents calculations
+  const toCents = (n: number) => Math.round((Number(n) || 0) * 100);
 
-  // Today
-  let todayIncome = 0;
-  let todayExpense = 0;
+  // Totals in integer cents
+  let totalIncomeCents = 0;
+  let totalExpenseCents = 0;
+
+  // Today in integer cents
+  let todayIncomeCents = 0;
+  let todayExpenseCents = 0;
   let todayExpenseCount = 0;
   let todayIncomeCount = 0;
 
-  // Week
-  let weekIncome = 0;
-  let weekExpense = 0;
+  // Week in integer cents
+  let weekIncomeCents = 0;
+  let weekExpenseCents = 0;
   let weekExpenseCount = 0;
   let weekIncomeCount = 0;
 
-  // Month
-  let monthIncome = 0;
-  let monthExpense = 0;
+  // Month in integer cents
+  let monthIncomeCents = 0;
+  let monthExpenseCents = 0;
   let monthExpenseCount = 0;
   let monthIncomeCount = 0;
 
   expenses.forEach((exp) => {
     const isIncome = exp.type === 'income';
-    const amount = exp.amount;
+    const amountCents = toCents(exp.amount);
     const expDate = new Date(exp.date);
 
     if (isIncome) {
-      totalIncome += amount;
+      totalIncomeCents += amountCents;
     } else {
-      totalExpense += amount;
+      totalExpenseCents += amountCents;
     }
 
     if (exp.date === todayStr) {
       if (isIncome) {
-        todayIncome += amount;
+        todayIncomeCents += amountCents;
         todayIncomeCount += 1;
       } else {
-        todayExpense += amount;
+        todayExpenseCents += amountCents;
         todayExpenseCount += 1;
       }
     }
 
     if (expDate >= startOfWeek) {
       if (isIncome) {
-        weekIncome += amount;
+        weekIncomeCents += amountCents;
         weekIncomeCount += 1;
       } else {
-        weekExpense += amount;
+        weekExpenseCents += amountCents;
         weekExpenseCount += 1;
       }
     }
 
     if (exp.date.startsWith(currentYearMonth)) {
       if (isIncome) {
-        monthIncome += amount;
+        monthIncomeCents += amountCents;
         monthIncomeCount += 1;
       } else {
-        monthExpense += amount;
+        monthExpenseCents += amountCents;
         monthExpenseCount += 1;
       }
     }
   });
 
-  const overallNet = totalIncome - totalExpense;
-  const todayNet = todayIncome - todayExpense;
-  const weekNet = weekIncome - weekExpense;
-  const monthNet = monthIncome - monthExpense;
+  const totalIncome = totalIncomeCents / 100;
+  const totalExpense = totalExpenseCents / 100;
+  const todayIncome = todayIncomeCents / 100;
+  const todayExpense = todayExpenseCents / 100;
+  const weekIncome = weekIncomeCents / 100;
+  const weekExpense = weekExpenseCents / 100;
+  const monthIncome = monthIncomeCents / 100;
+  const monthExpense = monthExpenseCents / 100;
+
+  const overallNet = (totalIncomeCents - totalExpenseCents) / 100;
+  const todayNet = (todayIncomeCents - todayExpenseCents) / 100;
+  const weekNet = (weekIncomeCents - weekExpenseCents) / 100;
+  const monthNet = (monthIncomeCents - monthExpenseCents) / 100;
 
   // Recurring breakdown & forecast calculations
   const monthLoggedRecurringExpense = expenses
@@ -219,7 +231,7 @@ export const DailyStats: React.FC<DailyStatsProps> = ({
               }`}
             >
               <PiggyBank className="h-3 w-3" />
-              Net Balance
+              Recorded Net
             </span>
             <p
               className={`text-sm sm:text-base font-black tabular-nums whitespace-nowrap ${
@@ -233,7 +245,7 @@ export const DailyStats: React.FC<DailyStatsProps> = ({
                 overallNet >= 0 ? 'text-emerald-400' : 'text-amber-400'
               }`}
             >
-              {overallNet >= 0 ? 'Net Savings' : 'Deficit'}
+              {overallNet >= 0 ? 'Surplus (All-time)' : 'Deficit (All-time)'}
             </span>
           </div>
         </div>
@@ -442,7 +454,7 @@ export const DailyStats: React.FC<DailyStatsProps> = ({
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-md font-semibold text-[10px]">
-                  On Track
+                  Within overall budget
                 </span>
               )}
             </div>

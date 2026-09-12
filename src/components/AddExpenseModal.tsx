@@ -32,6 +32,7 @@ interface AddExpenseModalProps {
   categories?: CategoryItem[];
   onOpenCategoryManager?: () => void;
   initialExpense?: Expense | null;
+  initialType?: TransactionType;
   isDark?: boolean;
 }
 
@@ -65,16 +66,27 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
   categories = [],
   onOpenCategoryManager,
   initialExpense,
+  initialType,
   isDark = true,
 }) => {
-  const [txType, setTxType] = useState<TransactionType>(initialExpense?.type || 'expense');
+  const [txType, setTxType] = useState<TransactionType>(
+    initialExpense?.type || initialType || 'expense'
+  );
   const [amount, setAmount] = useState(initialExpense ? initialExpense.amount.toString() : '');
   const [merchant, setMerchant] = useState(initialExpense ? initialExpense.merchant : '');
   const [category, setCategory] = useState<ExpenseCategory>(
-    initialExpense ? initialExpense.category : 'Food & Dining'
+    initialExpense
+      ? initialExpense.category
+      : initialType === 'income'
+      ? 'Salary'
+      : 'Food & Dining'
   );
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
-    initialExpense ? initialExpense.paymentMethod : 'Credit Card'
+    initialExpense
+      ? initialExpense.paymentMethod
+      : initialType === 'income'
+      ? 'Bank Transfer'
+      : 'Credit Card'
   );
   const [date, setDate] = useState(
     initialExpense ? initialExpense.date : new Date().toISOString().slice(0, 10)
@@ -92,7 +104,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
     initialExpense?.recurringInterval || 'monthly'
   );
 
-  // Sync state when initialExpense changes
+  // Sync state when initialExpense or initialType changes
   useEffect(() => {
     if (initialExpense) {
       setTxType(initialExpense.type || 'expense');
@@ -105,18 +117,19 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
       setSummary(initialExpense.summary || '');
       setTags(initialExpense.tags || []);
     } else {
-      setTxType('expense');
+      const defaultType = initialType || 'expense';
+      setTxType(defaultType);
       setAmount('');
       setMerchant('');
-      setCategory('Food & Dining');
-      setPaymentMethod('Credit Card');
+      setCategory(defaultType === 'income' ? 'Salary' : 'Food & Dining');
+      setPaymentMethod(defaultType === 'income' ? 'Bank Transfer' : 'Credit Card');
       setDate(new Date().toISOString().slice(0, 10));
       setTime(new Date().toTimeString().slice(0, 5));
       setSummary('');
       setTags([]);
     }
     setError(null);
-  }, [initialExpense, isOpen]);
+  }, [initialExpense, initialType, isOpen]);
 
   if (!isOpen) return null;
 

@@ -277,6 +277,44 @@ function getInitialRecurring(): RecurringExpense[] {
   ];
 }
 
+function safePersistExpenses(expenses: Expense[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY_EXPENSES, JSON.stringify(expenses));
+  } catch (err) {
+    console.warn('LocalStorage quota exceeded. Pruning image data to prevent transaction loss...');
+    try {
+      // Keep receipt image only on newest 2 items, strip from older items
+      const pruned = expenses.map((e, idx) => {
+        if (idx >= 2 && e.receiptImage) {
+          const { receiptImage, ...rest } = e;
+          return rest as Expense;
+        }
+        return e;
+      });
+      localStorage.setItem(STORAGE_KEY_EXPENSES, JSON.stringify(pruned));
+    } catch (secondErr) {
+      // Critical fallback: strip receipt images completely so financial records are 100% saved
+      try {
+        const textOnly = expenses.map((e) => {
+          const { receiptImage, ...rest } = e;
+          return rest as Expense;
+        });
+        localStorage.setItem(STORAGE_KEY_EXPENSES, JSON.stringify(textOnly));
+      } catch (finalErr) {
+        console.error('Critical storage error: could not save expenses', finalErr);
+      }
+    }
+  }
+}
+
+function safeSetStorage(key: string, value: any) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    console.warn(`Could not save ${key} to storage:`, e);
+  }
+}
+
 export function useExpenses() {
   const [expenses, setExpenses] = useState<Expense[]>(getInitialExpenses);
   const [settings, setSettings] = useState<UserSettings>(getInitialSettings);
@@ -286,21 +324,21 @@ export function useExpenses() {
 
   const hasCheckedRecurringRef = useRef(false);
 
-  // Sync to local storage
+  // Sync to local storage safely
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_EXPENSES, JSON.stringify(expenses));
+    safePersistExpenses(expenses);
   }, [expenses]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
+    safeSetStorage(STORAGE_KEY_SETTINGS, settings);
   }, [settings]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_CATEGORIES, JSON.stringify(categories));
+    safeSetStorage(STORAGE_KEY_CATEGORIES, categories);
   }, [categories]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_RECURRING, JSON.stringify(recurringExpenses));
+    safeSetStorage(STORAGE_KEY_RECURRING, recurringExpenses);
   }, [recurringExpenses]);
 
   const triggerHaptic = () => {

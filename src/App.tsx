@@ -1,42 +1,43 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-  Camera,
-  Plus,
-  Sparkles,
-  Settings as SettingsIcon,
-  Search,
-  Receipt,
-  Calendar,
   Moon,
   Sun,
-  Tag,
-  ArrowDownLeft,
-  ArrowUpRight,
-  Filter,
-  Repeat,
-  HelpCircle,
 } from 'lucide-react';
 import { useExpenses } from './hooks/useExpenses';
 import { AndroidFrame } from './components/AndroidFrame';
-import { DailyStats } from './components/DailyStats';
-import { CategoryBreakdown } from './components/CategoryBreakdown';
-import { ExpenseCard } from './components/ExpenseCard';
+import { BottomNavigation, NavDestination } from './components/BottomNavigation';
+import { HomeView } from './components/HomeView';
+import { TransactionsView, DateFilterType, TxTypeFilter } from './components/TransactionsView';
+import { BudgetsView } from './components/BudgetsView';
+import { SettingsView } from './components/SettingsView';
 import { ReceiptScannerModal } from './components/ReceiptScannerModal';
+import { QuickAddExpenseModal } from './components/QuickAddExpenseModal';
 import { AddExpenseModal } from './components/AddExpenseModal';
 import { ExpenseDetailModal } from './components/ExpenseDetailModal';
-import { SettingsModal } from './components/SettingsModal';
 import { CategoryManagerModal } from './components/CategoryManagerModal';
 import { RecurringExpensesModal } from './components/RecurringExpensesModal';
 import { InteractiveWalkthrough } from './components/InteractiveWalkthrough';
 import { BudgetWalletsModal } from './components/BudgetWalletsModal';
-import { AIInsightsSection } from './components/AIInsightsSection';
+import { ExcelImportModal } from './components/ExcelImportModal';
 import { PWAInstallButton } from './components/PWAInstallButton';
+import { PWAUpdateBanner } from './components/PWAUpdateBanner';
+import { usePWAUpdate } from './hooks/usePWAUpdate';
 import { Expense, ExpenseCategory, TransactionType } from './types';
-
-type DateFilterType = 'all' | 'today' | 'week' | 'month';
-type TxTypeFilter = 'all' | 'expense' | 'income' | 'recurring';
+import { calculateSpendingAlerts } from './utils/spendingAlerts';
+import { exportExpensesToExcel } from './utils/spreadsheetParser';
 
 export default function App() {
+  const {
+    needRefresh,
+    isChecking: isCheckingUpdate,
+    checkStatus: updateCheckStatus,
+    lastChecked,
+    checkForUpdate,
+    updateApp,
+    forceClearCacheAndReload,
+    dismissRefreshPrompt,
+  } = usePWAUpdate();
+
   const {
     expenses,
     settings,
@@ -67,10 +68,15 @@ export default function App() {
 
   const isDark = settings.theme !== 'light';
 
+  // Navigation State
+  const [currentTab, setCurrentTab] = useState<NavDestination>('home');
+
   // Modals state
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isQuickAddModalOpen, setIsQuickAddModalOpen] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
+  const [addModalInitialType, setAddModalInitialType] = useState<TransactionType>('expense');
   const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
   const [isRecurringOpen, setIsRecurringOpen] = useState(false);
   const [isBudgetWalletsOpen, setIsBudgetWalletsOpen] = useState(false);
@@ -86,7 +92,7 @@ export default function App() {
     }
   }, []);
 
-  // Filters state
+  // Filter state for Transactions tab
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<ExpenseCategory | 'All'>('All');
   const [dateFilter, setDateFilter] = useState<DateFilterType>('all');
@@ -98,143 +104,57 @@ export default function App() {
     return recurringExpenses.filter((r) => r.isActive && r.nextDueDate <= today).length;
   }, [recurringExpenses]);
 
-  // Count recurring items in expense ledger
-  const recurringExpensesInLedgerCount = useMemo(() => {
-    return expenses.filter((e) => e.isRecurring || e.tags?.includes('recurring')).length;
-  }, [expenses]);
+  // Count active spending alerts
+  const spendingAlerts = useMemo(() => {
+    return calculateSpendingAlerts(expenses, settings);
+  }, [expenses, settings]);
 
-  // Handle opening edit modal
-  const handleOpenEdit = (expense: Expense) => {
-    setEditingExpense(expense);
+  // Handler to open Add Modal with a specific type
+  const handleOpenAdd = (type: TransactionType) => {
+    setEditingExpense(null);
+    setAddModalInitialType(type);
     setIsAddOpen(true);
   };
 
-  // Filtered transactions
-  const filteredExpenses = useMemo(() => {
-    const todayStr = new Date().toISOString().slice(0, 10);
+  // Handler to open Edit Modal
+  const handleOpenEdit = (expense: Expense) => {
+    setEditingExpense(expense);
+    setAddModalInitialType(expense.type || 'expense');
+    setIsAddOpen(true);
+  };
 
-    const now = new Date();
-    const currentDay = now.getDay();
-    const distanceToMonday = (currentDay + 6) % 7;
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - distanceToMonday);
-    startOfWeek.setHours(0, 0, 0, 0);
+  // Switch to Transactions tab with pre-applied filter
+  const handleNavigateToTransactions = (category?: ExpenseCategory) => {
+    if (category) {
+      setSelectedCategory(category);
+      setTxTypeFilter('expense');
+      setDateFilter('month');
+    }
+    setCurrentTab('transactions');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
-    const currentYearMonth = todayStr.slice(0, 7);
-
-    return expenses.filter((exp) => {
-      // Type filter (all vs expense vs income vs recurring)
-      if (txTypeFilter === 'recurring') {
-        if (!exp.isRecurring && !exp.tags?.includes('recurring')) return false;
-      } else if (txTypeFilter !== 'all') {
-        const itemType = exp.type || 'expense';
-        if (itemType !== txTypeFilter) return false;
-      }
-
-      // Category filter
-      if (selectedCategory !== 'All' && exp.category !== selectedCategory) {
-        return false;
-      }
-
-      // Date range filter
-      if (dateFilter === 'today' && exp.date !== todayStr) {
-        return false;
-      }
-      if (dateFilter === 'week') {
-        const expDate = new Date(exp.date);
-        if (expDate < startOfWeek) return false;
-      }
-      if (dateFilter === 'month' && !exp.date.startsWith(currentYearMonth)) {
-        return false;
-      }
-
-      // Search query filter (merchant, summary, tags, items)
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchesMerchant = exp.merchant.toLowerCase().includes(q);
-        const matchesSummary = exp.summary?.toLowerCase().includes(q);
-        const matchesTags = exp.tags?.some((t) => t.toLowerCase().includes(q));
-        const matchesItems = exp.items?.some((it) => it.name.toLowerCase().includes(q));
-        if (!matchesMerchant && !matchesSummary && !matchesTags && !matchesItems) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [expenses, txTypeFilter, selectedCategory, dateFilter, searchQuery]);
-
-  // Group filtered expenses by Date for clean daily timeline
-  const groupedExpenses = useMemo(() => {
-    const groups: {
-      date: string;
-      displayDate: string;
-      totalExpense: number;
-      totalIncome: number;
-      items: Expense[];
-    }[] = [];
-    const todayStr = new Date().toISOString().slice(0, 10);
-
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().slice(0, 10);
-
-    // Sort descending by date & time
-    const sorted = [...filteredExpenses].sort((a, b) => {
-      if (b.date !== a.date) {
-        return b.date.localeCompare(a.date);
-      }
-      return (b.time || '').localeCompare(a.time || '');
-    });
-
-    sorted.forEach((exp) => {
-      let group = groups.find((g) => g.date === exp.date);
-      if (!group) {
-        let displayDate = exp.date;
-        if (exp.date === todayStr) {
-          displayDate = 'Today';
-        } else if (exp.date === yesterdayStr) {
-          displayDate = 'Yesterday';
-        } else {
-          try {
-            const parsed = new Date(exp.date + 'T00:00:00');
-            displayDate = parsed.toLocaleDateString(undefined, {
-              weekday: 'short',
-              month: 'short',
-              day: 'numeric',
-            });
-          } catch (e) {
-            displayDate = exp.date;
-          }
-        }
-
-        group = {
-          date: exp.date,
-          displayDate,
-          totalExpense: 0,
-          totalIncome: 0,
-          items: [],
-        };
-        groups.push(group);
-      }
-      group.items.push(exp);
-      if (exp.type === 'income') {
-        group.totalIncome += exp.amount;
-      } else {
-        group.totalExpense += exp.amount;
-      }
-    });
-
-    return groups;
-  }, [filteredExpenses]);
+  // Switch to Budgets tab
+  const handleNavigateToBudgets = () => {
+    setCurrentTab('budgets');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   return (
     <AndroidFrame isDark={isDark}>
-      <div className="flex flex-col min-h-full pb-28">
-        {/* App Top Navigation Bar */}
+      <div className="flex flex-col min-h-full pb-32 relative">
+        {/* PWA Update Banner */}
+        <PWAUpdateBanner
+          needRefresh={needRefresh}
+          onUpdate={updateApp}
+          onDismiss={dismissRefreshPrompt}
+          isDark={isDark}
+        />
+
+        {/* Simplified Header */}
         <header
           className={`sticky top-0 z-20 border-b px-4 py-3 flex items-center justify-between transition-colors backdrop-blur-2xl ${
-            isDark ? 'border-white/10 bg-[#060b18]/80' : 'border-slate-200 bg-white/90'
+            isDark ? 'border-white/10 bg-[#060b18]/85' : 'border-slate-200 bg-white/95'
           }`}
         >
           <div className="flex items-center gap-2.5">
@@ -266,464 +186,159 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            {/* Dark Mode Quick Toggle */}
+          <div className="flex items-center gap-2">
+            {/* PWA Install Button (if browser supports install) */}
+            <PWAInstallButton variant="compact" />
+
+            {/* Dark/Light Mode Switch */}
             <button
               type="button"
+              id="header-theme-toggle"
               onClick={toggleTheme}
-              className={`rounded-xl border p-2 transition active:scale-95 ${
+              className={`min-h-[44px] min-w-[44px] flex items-center justify-center rounded-2xl border transition active:scale-95 ${
                 isDark
                   ? 'border-white/10 bg-white/5 text-amber-300 hover:bg-white/10'
                   : 'border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
               title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+              aria-label={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
             >
               {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </button>
-
-            {/* Manage Categories Shortcut */}
-            <button
-              type="button"
-              onClick={() => setIsCategoryManagerOpen(true)}
-              className={`rounded-xl border p-2 transition active:scale-95 ${
-                isDark
-                  ? 'border-white/10 bg-white/5 text-purple-300 hover:bg-white/10'
-                  : 'border-slate-200 bg-slate-100 text-purple-700 hover:bg-slate-200'
-              }`}
-              title="Manage Categories"
-            >
-              <Tag className="h-4 w-4" />
-            </button>
-
-            {/* Recurring Expenses & Subscriptions */}
-            <button
-              type="button"
-              id="btn-recurring-bills"
-              onClick={() => setIsRecurringOpen(true)}
-              className={`relative rounded-xl border p-2 transition active:scale-95 ${
-                isDark
-                  ? 'border-white/10 bg-white/5 text-purple-300 hover:bg-white/10'
-                  : 'border-slate-200 bg-slate-100 text-purple-700 hover:bg-slate-200'
-              }`}
-              title="Recurring Expenses & Subscriptions"
-            >
-              <Repeat className="h-4 w-4" />
-              {dueRecurringCount > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-bold text-white shadow ring-2 ring-slate-900 animate-pulse">
-                  {dueRecurringCount}
-                </span>
-              )}
-            </button>
-
-            {/* Beginner Guide / Walkthrough Shortcut */}
-            <button
-              type="button"
-              onClick={() => setIsWalkthroughOpen(true)}
-              className={`rounded-xl border p-2 transition active:scale-95 ${
-                isDark
-                  ? 'border-indigo-500/30 bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20'
-                  : 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 shadow-sm'
-              }`}
-              title="Beginner Guide & Walkthrough"
-            >
-              <HelpCircle className="h-4 w-4" />
-            </button>
-
-            {/* PWA Install Button */}
-            <PWAInstallButton variant="compact" />
-
-            {/* Settings Modal Trigger */}
-            <button
-              type="button"
-              onClick={() => setIsSettingsOpen(true)}
-              className={`rounded-xl border p-2 transition active:scale-95 ${
-                isDark
-                  ? 'border-white/10 bg-white/5 text-slate-300 hover:text-white hover:bg-white/10'
-                  : 'border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-              title="Settings & Data Export"
-            >
-              <SettingsIcon className="h-4 w-4" />
             </button>
           </div>
         </header>
 
         {/* Content Body */}
-        <main className="flex-1 p-4 pb-28 sm:pb-32 space-y-4">
-          {/* Auto-Generated Recurring Expenses Banner Alert */}
-          {autoGeneratedAlert && (
-            <div className="rounded-2xl border border-purple-500/40 bg-purple-950/70 p-3.5 flex items-center justify-between text-xs text-purple-200 shadow-xl backdrop-blur-md">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                  <Repeat className="h-4 w-4 animate-spin" style={{ animationDuration: '6s' }} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-white truncate">
-                    {autoGeneratedAlert.count} recurring {autoGeneratedAlert.count > 1 ? 'entries' : 'entry'} auto-logged!
-                  </p>
-                  <p className="text-[11px] text-purple-300/80 truncate">
-                    {autoGeneratedAlert.items.join(', ')}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    clearAutoGeneratedAlert();
-                    setIsRecurringOpen(true);
-                  }}
-                  className="rounded-lg bg-purple-600 hover:bg-purple-500 px-2.5 py-1 text-[11px] font-semibold text-white shadow transition active:scale-95"
-                >
-                  View
-                </button>
-                <button
-                  type="button"
-                  onClick={clearAutoGeneratedAlert}
-                  className="rounded-lg p-1 text-slate-400 hover:text-white transition"
-                  title="Dismiss notification"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
+        <main className="flex-1 p-4">
+          {currentTab === 'home' && (
+            <HomeView
+              expenses={expenses}
+              settings={settings}
+              categories={categories}
+              recurringExpenses={recurringExpenses}
+              autoGeneratedAlert={autoGeneratedAlert}
+              onClearAutoGeneratedAlert={clearAutoGeneratedAlert}
+              onOpenRecurring={() => setIsRecurringOpen(true)}
+              onOpenBudgetWallets={() => setIsBudgetWalletsOpen(true)}
+              onNavigateToTransactions={handleNavigateToTransactions}
+              onNavigateToBudgets={handleNavigateToBudgets}
+              onReviewTransaction={handleOpenEdit}
+              onSelectExpense={setSelectedExpense}
+              onEditExpense={handleOpenEdit}
+              onDeleteExpense={deleteExpense}
+              onOpenAddExpense={() => handleOpenAdd('expense')}
+              onOpenScanner={() => setIsScannerOpen(true)}
+              onSaveExpense={addExpense}
+              onOpenQuickAddChat={() => setIsQuickAddModalOpen(true)}
+              isDark={isDark}
+            />
           )}
 
-          {/* In-app Install banner if not installed */}
-          <PWAInstallButton variant="banner" />
+          {currentTab === 'transactions' && (
+            <TransactionsView
+              expenses={expenses}
+              currencySymbol={settings.currencySymbol}
+              categories={categories}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              selectedCategory={selectedCategory}
+              onCategoryChange={setSelectedCategory}
+              dateFilter={dateFilter}
+              onDateFilterChange={setDateFilter}
+              txTypeFilter={txTypeFilter}
+              onTxTypeFilterChange={setTxTypeFilter}
+              onSelectExpense={setSelectedExpense}
+              onEditExpense={handleOpenEdit}
+              onDeleteExpense={deleteExpense}
+              onOpenScanner={() => setIsScannerOpen(true)}
+              onOpenAddExpense={() => handleOpenAdd('expense')}
+              onOpenRecurring={() => setIsRecurringOpen(true)}
+              onOpenExcelImport={() => setIsExcelImportOpen(true)}
+              recurringExpensesCount={recurringExpenses.length}
+              dueRecurringCount={dueRecurringCount}
+              isDark={isDark}
+            />
+          )}
 
-          {/* Daily & Monthly Financial Stats (Income, Expense, Net & Recurring Forecast) */}
-          <DailyStats
-            expenses={expenses}
-            currencySymbol={settings.currencySymbol}
-            monthlyBudget={settings.monthlyBudget}
-            recurringExpenses={recurringExpenses}
-            onOpenBudgetWallets={() => setIsBudgetWalletsOpen(true)}
-            isDark={isDark}
-          />
+          {currentTab === 'budgets' && (
+            <BudgetsView
+              expenses={expenses}
+              settings={settings}
+              categories={categories}
+              onUpdateSettings={updateSettings}
+              onUpdateCategoryBudgetConfig={updateCategoryBudgetConfig}
+              onOpenAddSavingsTransfer={() => {
+                setEditingExpense({
+                  id: '',
+                  merchant: 'Savings Contribution',
+                  amount: 100,
+                  currency: settings.currency,
+                  date: new Date().toISOString().slice(0, 10),
+                  category: 'Savings',
+                  paymentMethod: 'Bank Transfer',
+                  createdAt: Date.now(),
+                  type: 'expense',
+                  tags: ['savings'],
+                });
+                setAddModalInitialType('expense');
+                setIsAddOpen(true);
+              }}
+              isDark={isDark}
+            />
+          )}
 
-          {/* Spending Alerts Section */}
-          <AIInsightsSection
-            expenses={expenses}
-            settings={settings}
-            isDark={isDark}
-            onOpenBudgetWallets={() => setIsBudgetWalletsOpen(true)}
-            onViewSpending={(category) => {
-              if (category) {
-                setSelectedCategory(category as ExpenseCategory);
-              }
-              setTxTypeFilter('expense');
-              setDateFilter('month');
-            }}
-            onReviewTransaction={(exp) => {
-              handleOpenEdit(exp);
-            }}
-            onOpenAddExpense={() => {
-              setEditingExpense(null);
-              setIsAddOpen(true);
-            }}
-          />
-
-          {/* Category Breakdown Meter */}
-          <CategoryBreakdown
-            expenses={expenses}
-            currencySymbol={settings.currencySymbol}
-            selectedCategory={selectedCategory}
-            onSelectCategory={setSelectedCategory}
-            customCategories={categories}
-            isDark={isDark}
-          />
-
-          {/* Transaction Type Tabs & Search Bar */}
-          <div className="space-y-2.5 pt-1">
-            {/* Expense vs Income vs Recurring vs All Selector */}
-            <div
-              className={`grid grid-cols-4 gap-1 rounded-2xl p-1 border transition-colors ${
-                isDark ? 'border-white/10 bg-white/5' : 'border-slate-200 bg-slate-100'
-              }`}
-            >
-              <button
-                type="button"
-                onClick={() => setTxTypeFilter('all')}
-                className={`py-1.5 text-xs font-semibold rounded-xl transition ${
-                  txTypeFilter === 'all'
-                    ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow'
-                    : isDark
-                    ? 'text-slate-400 hover:text-white'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                All
-              </button>
-              <button
-                type="button"
-                onClick={() => setTxTypeFilter('expense')}
-                className={`flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-xl transition ${
-                  txTypeFilter === 'expense'
-                    ? 'bg-rose-600 text-white shadow'
-                    : isDark
-                    ? 'text-slate-400 hover:text-white'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <ArrowUpRight className="h-3.5 w-3.5" />
-                Expenses
-              </button>
-              <button
-                type="button"
-                onClick={() => setTxTypeFilter('income')}
-                className={`flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-xl transition ${
-                  txTypeFilter === 'income'
-                    ? 'bg-emerald-600 text-white shadow'
-                    : isDark
-                    ? 'text-slate-400 hover:text-white'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <ArrowDownLeft className="h-3.5 w-3.5" />
-                Income
-              </button>
-              <button
-                type="button"
-                onClick={() => setTxTypeFilter('recurring')}
-                className={`flex items-center justify-center gap-1 py-1.5 text-xs font-semibold rounded-xl transition ${
-                  txTypeFilter === 'recurring'
-                    ? 'bg-purple-600 text-white shadow'
-                    : isDark
-                    ? 'text-purple-300 hover:text-white'
-                    : 'text-purple-700 hover:text-purple-900'
-                }`}
-                title="Filter to recurring expenses & subscriptions"
-              >
-                <Repeat className="h-3.5 w-3.5" />
-                <span>Recurring</span>
-                {recurringExpensesInLedgerCount > 0 && (
-                  <span className="text-[10px] opacity-80">({recurringExpensesInLedgerCount})</span>
-                )}
-              </button>
-            </div>
-
-            {/* Search Input */}
-            <div className="relative">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search merchant, notes, tags..."
-                className={`w-full rounded-2xl border pl-9 pr-8 py-2.5 text-xs focus:outline-none transition-colors ${
-                  isDark
-                    ? 'border-white/10 bg-white/5 text-white placeholder:text-slate-500 focus:border-indigo-400'
-                    : 'border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-indigo-500'
-                }`}
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-200"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-
-            {/* Time period filter tabs */}
-            <div className="flex items-center justify-between gap-1 overflow-x-auto pb-1 text-xs">
-              <div
-                className={`flex items-center gap-1 rounded-2xl p-1 border transition-colors ${
-                  isDark ? 'bg-white/5 border-white/10' : 'bg-slate-100 border-slate-200'
-                }`}
-              >
-                {(['all', 'today', 'week', 'month'] as DateFilterType[]).map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setDateFilter(tab)}
-                    className={`rounded-xl px-3 py-1.5 font-medium capitalize transition ${
-                      dateFilter === tab
-                        ? 'bg-indigo-600 text-white font-semibold shadow-md'
-                        : isDark
-                        ? 'text-slate-400 hover:text-white'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    {tab === 'all' ? 'All Time' : tab}
-                  </button>
-                ))}
-              </div>
-
-              {/* Active Category Indicator / Filter reset button */}
-              {selectedCategory !== 'All' && (
-                <button
-                  onClick={() => setSelectedCategory('All')}
-                  className="flex items-center gap-1.5 rounded-xl bg-indigo-500/20 border border-indigo-500/30 px-2.5 py-1.5 text-[11px] text-indigo-300 font-medium backdrop-blur-xl"
-                >
-                  <span>{selectedCategory}</span>
-                  <span className="text-indigo-400 font-bold">✕</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Daily Expense Timeline List */}
-          <div className="space-y-4 pt-1">
-            {/* Gesture Hint Banner */}
-            {groupedExpenses.length > 0 && (
-              <div
-                className={`flex items-center justify-between px-2 text-[10px] ${
-                  isDark ? 'text-slate-400' : 'text-slate-500'
-                }`}
-              >
-                <span>Swipe left on any record to Edit or Remove</span>
-                <span className="font-medium text-indigo-400">← Swipe gesture active</span>
-              </div>
-            )}
-
-            {groupedExpenses.length === 0 ? (
-              <div
-                className={`flex flex-col items-center justify-center rounded-3xl border border-dashed py-12 px-4 text-center transition-colors ${
-                  isDark
-                    ? 'border-white/10 bg-white/5 backdrop-blur-2xl'
-                    : 'border-slate-300 bg-white'
-                }`}
-              >
-                <div
-                  className={`mb-3 flex h-12 w-12 items-center justify-center rounded-2xl ${
-                    isDark ? 'bg-white/10 text-indigo-400' : 'bg-slate-100 text-indigo-600'
-                  }`}
-                >
-                  <Receipt className="h-6 w-6" />
-                </div>
-                <p
-                  className={`text-sm font-semibold mb-1 ${
-                    isDark ? 'text-white' : 'text-slate-900'
-                  }`}
-                >
-                  No transactions found
-                </p>
-                <p
-                  className={`text-xs max-w-xs mb-4 ${
-                    isDark ? 'text-slate-400' : 'text-slate-500'
-                  }`}
-                >
-                  {searchQuery || selectedCategory !== 'All' || dateFilter !== 'all' || txTypeFilter !== 'all'
-                    ? 'No transactions match your current search and filters.'
-                    : 'Your log is empty. Scan a receipt or enter an expense or income to begin.'}
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsScannerOpen(true)}
-                    className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-2 text-xs font-semibold text-white shadow-lg"
-                  >
-                    <Camera className="h-3.5 w-3.5" />
-                    Scan Receipt
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingExpense(null);
-                      setIsAddOpen(true);
-                    }}
-                    className={`flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-medium transition ${
-                      isDark
-                        ? 'border-white/10 bg-white/5 text-slate-200 hover:bg-white/10'
-                        : 'border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200'
-                    }`}
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Add Manual
-                  </button>
-                </div>
-              </div>
-            ) : (
-              groupedExpenses.map((group) => (
-                <div key={group.date} className="space-y-2">
-                  {/* Date Header with Daily Subtotals */}
-                  <div className="flex items-center justify-between px-1 text-xs">
-                    <span
-                      className={`font-semibold tracking-wide flex items-center gap-1.5 ${
-                        isDark ? 'text-slate-300' : 'text-slate-700'
-                      }`}
-                    >
-                      <Calendar className="h-3 w-3 text-indigo-400" />
-                      {group.displayDate}
-                    </span>
-                    <div className="flex items-center gap-2 text-[11px] font-mono">
-                      {group.totalIncome > 0 && (
-                        <span className="font-semibold text-emerald-400">
-                          +{settings.currencySymbol}{group.totalIncome.toFixed(2)}
-                        </span>
-                      )}
-                      {group.totalExpense > 0 && (
-                        <span className={`font-semibold ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                          -{settings.currencySymbol}{group.totalExpense.toFixed(2)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* List of swipeable transactions for this date */}
-                  <div className="space-y-2">
-                    {group.items.map((expense) => (
-                      <ExpenseCard
-                        key={expense.id}
-                        expense={expense}
-                        currencySymbol={settings.currencySymbol}
-                        customCategories={categories}
-                        isDark={isDark}
-                        onClick={() => setSelectedExpense(expense)}
-                        onEdit={() => handleOpenEdit(expense)}
-                        onDelete={() => deleteExpense(expense.id)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+          {currentTab === 'settings' && (
+            <SettingsView
+              settings={settings}
+              onUpdateSettings={updateSettings}
+              onToggleTheme={toggleTheme}
+              onOpenCategoryManager={() => setIsCategoryManagerOpen(true)}
+              onOpenWalkthrough={() => setIsWalkthroughOpen(true)}
+              onExportCSV={exportCSV}
+              onExportExcel={() => exportExpensesToExcel(expenses, settings.currencySymbol)}
+              onOpenExcelImport={() => setIsExcelImportOpen(true)}
+              onExportJSON={exportJSON}
+              onImportJSON={importJSON}
+              onClearAll={clearAllExpenses}
+              expensesCount={expenses.length}
+              isDark={isDark}
+              onCheckForUpdate={checkForUpdate}
+              isCheckingUpdate={isCheckingUpdate}
+              updateCheckStatus={updateCheckStatus}
+              onForceClearCache={forceClearCacheAndReload}
+              lastChecked={lastChecked}
+              needRefresh={needRefresh}
+            />
+          )}
         </main>
 
-        {/* Android Bottom Action Bar */}
-        <div className="fixed bottom-0 inset-x-0 z-20 max-w-md mx-auto pointer-events-none">
-          <div className="p-4 flex items-center justify-center pointer-events-auto">
-            <div
-              id="bottom-floating-actions"
-              className={`flex items-center gap-2 rounded-full border p-1.5 shadow-2xl transition-colors ${
-                isDark
-                  ? 'border-white/15 bg-white/10 backdrop-blur-2xl shadow-black/80'
-                  : 'border-slate-300 bg-white/95 backdrop-blur-2xl shadow-slate-400/50'
-              }`}
-            >
-              <button
-                type="button"
-                id="btn-scan-receipt"
-                onClick={() => setIsScannerOpen(true)}
-                className="flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-2.5 text-xs font-semibold text-white shadow-lg hover:from-indigo-500 hover:to-purple-500 active:scale-95 transition"
-              >
-                <Camera className="h-4 w-4" />
-                <span>Scan Receipt</span>
-              </button>
-              <button
-                type="button"
-                id="btn-quick-expense"
-                onClick={() => {
-                  setEditingExpense(null);
-                  setIsAddOpen(true);
-                }}
-                className={`flex items-center gap-1.5 rounded-full border px-3.5 py-2.5 text-xs font-semibold active:scale-95 transition ${
-                  isDark
-                    ? 'border-white/10 bg-white/5 text-slate-200 hover:bg-white/10'
-                    : 'border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                <Plus className="h-3.5 w-3.5 text-indigo-400" />
-                <span>+ Add</span>
-              </button>
-            </div>
-          </div>
-        </div>
+        {/* Unified 4-Destination Bottom Navigation + Combined "+ Add" Menu */}
+        <BottomNavigation
+          currentTab={currentTab}
+          onSelectTab={(tab) => {
+            setCurrentTab(tab);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          onOpenScanner={() => setIsScannerOpen(true)}
+          onOpenAddExpense={() => handleOpenAdd('expense')}
+          onOpenAddIncome={() => handleOpenAdd('income')}
+          onOpenQuickAdd={() => setIsQuickAddModalOpen(true)}
+          dueRecurringCount={dueRecurringCount}
+          alertsCount={spendingAlerts.length}
+          isDark={isDark}
+        />
 
         {/* Modals */}
+        <QuickAddExpenseModal
+          isOpen={isQuickAddModalOpen}
+          onClose={() => setIsQuickAddModalOpen(false)}
+          onSaveExpense={addExpense}
+          onOpenFullEdit={handleOpenEdit}
+          defaultCurrency={settings.currency}
+          customCategories={categories}
+          isDark={isDark}
+        />
+
         <ReceiptScannerModal
           isOpen={isScannerOpen}
           onClose={() => setIsScannerOpen(false)}
@@ -732,8 +347,7 @@ export default function App() {
           defaultCurrency={settings.currency}
           onOpenManual={() => {
             setIsScannerOpen(false);
-            setEditingExpense(null);
-            setIsAddOpen(true);
+            handleOpenAdd('expense');
           }}
         />
 
@@ -753,6 +367,7 @@ export default function App() {
             setIsCategoryManagerOpen(true);
           }}
           initialExpense={editingExpense}
+          initialType={addModalInitialType}
           isDark={isDark}
         />
 
@@ -791,24 +406,6 @@ export default function App() {
           isDark={isDark}
         />
 
-        <SettingsModal
-          isOpen={isSettingsOpen}
-          onClose={() => setIsSettingsOpen(false)}
-          settings={settings}
-          onUpdateSettings={updateSettings}
-          onToggleTheme={toggleTheme}
-          onOpenCategoryManager={() => setIsCategoryManagerOpen(true)}
-          onOpenRecurringManager={() => setIsRecurringOpen(true)}
-          recurringCount={recurringExpenses.length}
-          onOpenWalkthrough={() => setIsWalkthroughOpen(true)}
-          onExportCSV={exportCSV}
-          onExportJSON={exportJSON}
-          onImportJSON={importJSON}
-          onClearAll={clearAllExpenses}
-          expensesCount={expenses.length}
-          isDark={isDark}
-        />
-
         <BudgetWalletsModal
           isOpen={isBudgetWalletsOpen}
           onClose={() => setIsBudgetWalletsOpen(false)}
@@ -829,26 +426,19 @@ export default function App() {
           isOpen={isWalkthroughOpen}
           onClose={() => setIsWalkthroughOpen(false)}
           onOpenScanner={() => setIsScannerOpen(true)}
-          onOpenAddExpense={() => {
-            setEditingExpense(null);
-            setIsAddOpen(true);
-          }}
-          onOpenAddIncome={() => {
-            setEditingExpense({
-              id: '',
-              merchant: '',
-              amount: 0,
-              currency: settings.currency,
-              date: new Date().toISOString().slice(0, 10),
-              category: 'Salary',
-              paymentMethod: 'Bank Transfer',
-              createdAt: Date.now(),
-              type: 'income',
-            });
-            setIsAddOpen(true);
-          }}
+          onOpenAddExpense={() => handleOpenAdd('expense')}
+          onOpenAddIncome={() => handleOpenAdd('income')}
           onOpenRecurring={() => setIsRecurringOpen(true)}
-          onOpenBudgetWallets={() => setIsBudgetWalletsOpen(true)}
+          onOpenBudgetWallets={handleNavigateToBudgets}
+          isDark={isDark}
+        />
+
+        {/* Excel & CSV Spreadsheet Importer Modal */}
+        <ExcelImportModal
+          isOpen={isExcelImportOpen}
+          onClose={() => setIsExcelImportOpen(false)}
+          onImportExpenses={addMultipleExpenses}
+          defaultCurrency={settings.currency}
           isDark={isDark}
         />
       </div>

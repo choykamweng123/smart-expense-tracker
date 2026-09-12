@@ -315,7 +315,7 @@ export const AIInsightsSection: React.FC<AIInsightsSectionProps> = ({
                     )}
 
                     {alert.type === 'budget_approaching' && (
-                      <div className="flex items-center gap-2 w-full justify-start">
+                      <div className="flex items-center gap-2 w-full justify-between flex-wrap">
                         <button
                           type="button"
                           onClick={() => {
@@ -328,6 +328,16 @@ export const AIInsightsSection: React.FC<AIInsightsSectionProps> = ({
                           <span>View spending</span>
                           <ExternalLink className="h-3 w-3" />
                         </button>
+
+                        {onOpenBudgetWallets && (
+                          <button
+                            type="button"
+                            onClick={onOpenBudgetWallets}
+                            className="min-h-[44px] px-3 py-2 text-xs font-semibold text-amber-300 hover:text-white hover:underline transition"
+                          >
+                            Edit budget
+                          </button>
+                        )}
                       </div>
                     )}
 

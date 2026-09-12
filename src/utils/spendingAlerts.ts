@@ -110,7 +110,7 @@ export function calculateSpendingAlerts(
     const budgetAmount = wallet.availableBudget > 0 ? wallet.availableBudget : wallet.baseBudget;
 
     if (spentCents > budgetCents) {
-      // Exceeded
+      // Exceeded (> 100%) - show only exceeded alert
       categoriesWithExceeded.add(wallet.category);
       const overCents = spentCents - budgetCents;
       const overAmount = overCents / 100;
@@ -122,8 +122,8 @@ export function calculateSpendingAlerts(
         severity: 'critical',
         priority: 1,
         title: `${wallet.category} budget exceeded`,
-        supportingText: `${formatMoney(spentAmount, sym)} spent / ${formatMoney(budgetAmount, sym)} budget`,
-        statusText: `${formatMoney(overAmount, sym)} over`,
+        supportingText: `${formatMoney(spentAmount, sym)} spent vs ${formatMoney(budgetAmount, sym)} budget`,
+        statusText: `${formatMoney(overAmount, sym)} over budget`,
         category: wallet.category,
         spentAmount,
         budgetAmount,
@@ -144,9 +144,9 @@ export function calculateSpendingAlerts(
         priority: 2,
         title: isExactlyFull
           ? `${wallet.category} budget fully used`
-          : `${wallet.category} budget almost used`,
-        supportingText: `${formatMoney(spentAmount, sym)} of ${formatMoney(budgetAmount, sym)} spent`,
-        statusText: `${formatMoney(remainingAmount, sym)} remaining`,
+          : `${wallet.category} approaching budget limit`,
+        supportingText: `${formatMoney(spentAmount, sym)} of ${formatMoney(budgetAmount, sym)} limit`,
+        statusText: isExactlyFull ? 'Budget fully used' : `${formatMoney(remainingAmount, sym)} remaining`,
         category: wallet.category,
         spentAmount,
         budgetAmount,
@@ -167,6 +167,7 @@ export function calculateSpendingAlerts(
     const overallBudgetAmount = overallBudgetCents / 100;
 
     if (totalSpentCents > overallBudgetCents) {
+      // Exceeded overall
       const overCents = totalSpentCents - overallBudgetCents;
       const overAmount = overCents / 100;
 
@@ -177,8 +178,8 @@ export function calculateSpendingAlerts(
         severity: 'critical',
         priority: 1,
         title: `Overall budget exceeded`,
-        supportingText: `${formatMoney(totalSpentAmount, sym)} spent / ${formatMoney(overallBudgetAmount, sym)} budget`,
-        statusText: `${formatMoney(overAmount, sym)} over`,
+        supportingText: `${formatMoney(totalSpentAmount, sym)} spent vs ${formatMoney(overallBudgetAmount, sym)} budget`,
+        statusText: `${formatMoney(overAmount, sym)} over budget`,
         spentAmount: totalSpentAmount,
         budgetAmount: overallBudgetAmount,
         overAmount,
@@ -188,26 +189,34 @@ export function calculateSpendingAlerts(
       totalSpentCents >= Math.round(overallBudgetCents * 0.8) &&
       totalSpentCents <= overallBudgetCents
     ) {
-      const remainingCents = Math.max(0, overallBudgetCents - totalSpentCents);
-      const remainingAmount = remainingCents / 100;
-      const isExactlyFull = totalSpentCents === overallBudgetCents;
+      // Approaching overall: avoid near-duplicate warning if a category is already approaching/exceeded
+      const hasCategoryWarning = alerts.some(
+        (a) => a.type === 'budget_exceeded' || a.type === 'budget_approaching'
+      );
 
-      alerts.push({
-        id: `budget-approaching-overall`,
-        signature: `budget_approaching:overall:${currentMonthKey}`,
-        type: 'budget_approaching',
-        severity: 'warning',
-        priority: 2,
-        title: isExactlyFull
-          ? `Overall budget fully used`
-          : `Overall budget almost used`,
-        supportingText: `${formatMoney(totalSpentAmount, sym)} of ${formatMoney(overallBudgetAmount, sym)} spent`,
-        statusText: `${formatMoney(remainingAmount, sym)} remaining`,
-        spentAmount: totalSpentAmount,
-        budgetAmount: overallBudgetAmount,
-        remainingAmount,
-        filterMonth: currentMonthKey,
-      });
+      // Only add overall approaching if no specific category warning exists (prefer more actionable category alert)
+      if (!hasCategoryWarning) {
+        const remainingCents = Math.max(0, overallBudgetCents - totalSpentCents);
+        const remainingAmount = remainingCents / 100;
+        const isExactlyFull = totalSpentCents === overallBudgetCents;
+
+        alerts.push({
+          id: `budget-approaching-overall`,
+          signature: `budget_approaching:overall:${currentMonthKey}`,
+          type: 'budget_approaching',
+          severity: 'warning',
+          priority: 2,
+          title: isExactlyFull
+            ? `Overall budget fully used`
+            : `Overall budget approaching limit`,
+          supportingText: `${formatMoney(totalSpentAmount, sym)} of ${formatMoney(overallBudgetAmount, sym)} limit`,
+          statusText: isExactlyFull ? 'Budget fully used' : `${formatMoney(remainingAmount, sym)} remaining`,
+          spentAmount: totalSpentAmount,
+          budgetAmount: overallBudgetAmount,
+          remainingAmount,
+          filterMonth: currentMonthKey,
+        });
+      }
     }
   }
 
