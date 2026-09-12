@@ -1,4 +1,5 @@
 import express from 'express';
+import http from 'http';
 import path from 'path';
 import dotenv from 'dotenv';
 import { GoogleGenAI, Type } from '@google/genai';
@@ -937,12 +938,19 @@ Days remaining in month: ${safeDays}`;
     });
   });
 
+  // Create the HTTP server so Vite HMR can share the same port/WebSocket upgrade path.
+  const httpServer = http.createServer(app);
+
   // Vite middleware for development or Static serving for production
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
-        hmr: false,
+        // Attach HMR to the Express HTTP server so the client WebSocket connects
+        // over the same host/port (required behind proxied preview environments).
+        hmr: {
+          server: httpServer,
+        },
       },
       appType: 'spa',
     });
@@ -991,7 +999,7 @@ Days remaining in month: ${safeDays}`;
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running securely on http://0.0.0.0:${PORT}`);
   });
 }

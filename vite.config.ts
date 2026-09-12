@@ -78,11 +78,5 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
-    server: {
-      // Explicitly disable HMR in AI Studio container environment to prevent websocket connection errors.
-      hmr: false,
-      // Disable file watching to save CPU and prevent unexpected restarts during edits.
-      watch: null,
-    },
   };
 });
